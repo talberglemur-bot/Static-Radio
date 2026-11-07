@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { fetcher, formatTime, sendJson } from '@/lib/fetcher'
 import { cn } from '@/lib/utils'
+import { extractAudioAsMp3, isVideoFile } from '@/lib/extract-audio'
 import { control, type LibraryTrack } from './control'
 
 const MULTIPART_FROM = 8 * 1024 * 1024
@@ -143,7 +144,7 @@ async function uploadToBlob(file: File, onProgress: (pct: number) => void) {
   throw lastErr instanceof Error ? lastErr : new Error('Opplastingen feilet')
 }
 
-type Job = { name: string; pct: number; state: 'venter' | 'laster' | 'ferdig' | 'feil' }
+type Job = { name: string; pct: number; state: 'venter' | 'konverterer' | 'laster' | 'ferdig' | 'feil'; error?: string }
 
 type TrackKind = LibraryTrack['kind']
 const KIND_LABEL: Record<TrackKind, string> = { music: 'Låt', sfx: 'Lydeffekt', ad: 'Reklame' }
@@ -176,15 +177,25 @@ export function UploadForm({
     setBusy(true)
     setJobs(files.map((f) => ({ name: f.name, pct: 0, state: 'venter' })))
     let ok = 0
-    for (const [i, file] of files.entries()) {
-      patchJob(i, { state: 'laster' })
+    for (const [i, original] of files.entries()) {
       try {
+        let file = original
+        let durationPromise: Promise<number>
+        if (isVideoFile(original)) {
+          patchJob(i, { state: 'konverterer', pct: 0 })
+          const extracted = await extractAudioAsMp3(original, (pct) => patchJob(i, { pct }))
+          file = extracted.file
+          durationPromise = Promise.resolve(extracted.durationSec)
+        } else {
+          durationPromise = readDuration(file)
+        }
+        patchJob(i, { state: 'laster', pct: 0 })
         const [durationSec, stored] = await Promise.all([
-          readDuration(file),
+          durationPromise,
           uploadToBlob(file, (pct) => patchJob(i, { pct })),
         ])
         await sendJson('/api/tracks', 'POST', {
-          title: (files.length === 1 && title) || file.name.replace(/\.[^.]+$/, ''),
+          title: (files.length === 1 && title) || original.name.replace(/\.[^.]+$/, ''),
           artist,
           kind,
           durationSec,
@@ -194,8 +205,9 @@ export function UploadForm({
         ok++
         onDone()
       } catch (err) {
-        patchJob(i, { state: 'feil' })
-        toast.error(`${file.name}: ${err instanceof Error ? err.message : 'Opplastingen feilet'}`)
+        const message = err instanceof Error && err.message ? err.message : 'Opplastingen feilet'
+        patchJob(i, { state: 'feil', error: message })
+        toast.error(`${original.name}: ${message}`)
       }
     }
     if (ok > 0) toast.success(ok === 1 ? 'Lyden er lagt til' : `${ok} filer lagt til`)
@@ -215,13 +227,13 @@ export function UploadForm({
           id={`${idPrefix}-file`}
           ref={fileRef}
           type="file"
-          accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac"
+          accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.mov,.mp4"
           multiple
           required
           disabled={busy}
           className="h-11 text-base"
         />
-        <p className="text-xs text-muted-foreground">Du kan velge flere filer samtidig. Opptil 200 MB per fil.</p>
+        <p className="text-xs text-muted-foreground">Velg lydfiler eller videoer – lyden hentes automatisk ut av videoer. Du kan velge flere filer samtidig.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
@@ -272,7 +284,15 @@ export function UploadForm({
               <div className="flex items-center justify-between gap-2 text-xs">
                 <span className="truncate">{j.name}</span>
                 <span className={cn('shrink-0 tabular-nums', j.state === 'feil' ? 'text-destructive' : 'text-muted-foreground')}>
-                  {j.state === 'laster' ? `${Math.round(j.pct)} %` : j.state === 'ferdig' ? 'Ferdig' : j.state === 'feil' ? 'Feilet' : 'Venter'}
+                  {j.state === 'konverterer'
+                    ? `Henter lyd ${Math.round(j.pct)} %`
+                    : j.state === 'laster'
+                      ? `${Math.round(j.pct)} %`
+                      : j.state === 'ferdig'
+                        ? 'Ferdig'
+                        : j.state === 'feil'
+                          ? 'Feilet'
+                          : 'Venter'}
                 </span>
               </div>
               <div
@@ -288,6 +308,7 @@ export function UploadForm({
                   style={{ width: `${j.state === 'feil' ? 100 : j.pct}%` }}
                 />
               </div>
+              {j.error && <p className="text-xs leading-relaxed text-destructive">{j.error}</p>}
             </li>
           ))}
         </ul>
