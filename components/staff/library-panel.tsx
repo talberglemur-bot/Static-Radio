@@ -82,28 +82,62 @@ async function readDuration(file: File) {
   return Math.max(1, (file.size * 8) / 192_000)
 }
 
-let storeAccess: 'private' | 'public' | null = null
+type Access = 'private' | 'public'
+const ACCESS_KEY = 'radio-blob-access'
+const STALL_MS = 45_000
+
+function rememberedAccess(): Access | null {
+  try {
+    const v = localStorage.getItem(ACCESS_KEY)
+    return v === 'public' || v === 'private' ? v : null
+  } catch {
+    return null
+  }
+}
+
+// The Blob client retries failed requests with long backoff, so a wrong access
+// mode or a dead connection looks like "stuck at 0%". Abort when nothing moves.
+async function uploadOnce(path: string, file: File, access: Access, onProgress: (pct: number) => void) {
+  const controller = new AbortController()
+  let timer = setTimeout(() => controller.abort(), STALL_MS)
+  try {
+    return await upload(path, file, {
+      access,
+      handleUploadUrl: '/api/tracks/upload',
+      contentType: audioType(file),
+      multipart: file.size >= MULTIPART_FROM,
+      abortSignal: controller.signal,
+      onUploadProgress: ({ percentage }) => {
+        clearTimeout(timer)
+        timer = setTimeout(() => controller.abort(), STALL_MS)
+        onProgress(percentage)
+      },
+    })
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error('Opplastingen stoppet opp – sjekk nettet og prøv igjen')
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 async function uploadToBlob(file: File, onProgress: (pct: number) => void) {
-  const options = {
-    handleUploadUrl: '/api/tracks/upload',
-    contentType: audioType(file),
-    multipart: file.size >= MULTIPART_FROM,
-    onUploadProgress: ({ percentage }: { percentage: number }) => onProgress(percentage),
-  }
   const safeName = file.name.replace(/[^\w.\-]+/g, '_').slice(-80) || 'lyd'
   const path = `tracks/${safeName}`
-  const order: ('private' | 'public')[] = storeAccess ? [storeAccess] : ['private', 'public']
+  const known = rememberedAccess()
+  const order: Access[] = known ? [known, known === 'public' ? 'private' : 'public'] : ['public', 'private']
   let lastErr: unknown
   for (const access of order) {
     try {
-      const blob = await upload(path, file, { ...options, access })
-      storeAccess = access
+      const blob = await uploadOnce(path, file, access, onProgress)
+      try {
+        localStorage.setItem(ACCESS_KEY, access)
+      } catch {}
       return { access, pathname: access === 'public' ? blob.url : blob.pathname }
     } catch (err) {
       lastErr = err
       const msg = err instanceof Error ? err.message.toLowerCase() : ''
-      if (!msg.includes('access') && !msg.includes('public') && !msg.includes('private')) break
+      if (!msg.includes('access') && !msg.includes('store')) break
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error('Opplastingen feilet')
