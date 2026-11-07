@@ -6,11 +6,11 @@ import {
   listenerPresence,
   liveChunk,
   queueItem,
+  relayStation,
   sfxEvent,
   track,
 } from '@/lib/db/schema'
 import { removeFile } from '@/lib/storage'
-import { NRK_STREAMS } from '@/lib/nrk-streams'
 
 export const LIVE_TIMEOUT_MS = 12_000
 const PRESENCE_WINDOW_MS = 20_000
@@ -226,6 +226,12 @@ export async function getStationState(
     }
   }
 
+  let relay: { id: string; name: string; src: string } | null = null
+  if (ch.relayUrl) {
+    const [s] = await db.select().from(relayStation).where(eq(relayStation.id, ch.relayUrl))
+    if (s) relay = { id: s.id, name: s.name, src: s.src }
+  }
+
   const isLive =
     ch.isLive &&
     !!ch.liveUpdatedAt &&
@@ -243,7 +249,7 @@ export async function getStationState(
       musicVolume: ch.musicVolume,
       autoDj: ch.autoDj,
       paused: !!ch.pausedAt,
-      relay: ch.relayUrl ? NRK_STREAMS.find((s) => s.id === ch.relayUrl) ?? null : null,
+      relay,
     },
     nowPlaying: current
       ? {

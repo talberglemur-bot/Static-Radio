@@ -82,6 +82,14 @@ export const channel = pgTable('channel', {
   createdAt: tz('created_at').notNull().defaultNow(),
 })
 
+export const relayStation = pgTable('relay_station', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  src: text('src').notNull(),
+  sort: integer('sort').notNull().default(0),
+  createdAt: tz('created_at').notNull().defaultNow(),
+})
+
 export const track = pgTable('track', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),

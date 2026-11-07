@@ -256,9 +256,10 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
         if (!el.paused) el.pause()
         return
       }
-      if (el.dataset.relay !== relay.id) {
+      const relayKey = `${relay.id}|${relay.src}`
+      if (el.dataset.relay !== relayKey) {
         el.crossOrigin = 'anonymous'
-        el.dataset.relay = relay.id
+        el.dataset.relay = relayKey
         delete el.dataset.trackId
         el.src = relay.src
         el.load()
