@@ -10,7 +10,7 @@ export async function storeFile(
   body: Blob | ArrayBuffer | Buffer,
   contentType?: string,
 ): Promise<StoredFile> {
-  const order: ('private' | 'public')[] = knownAccess ? [knownAccess] : ['private', 'public']
+  const order: ('private' | 'public')[] = knownAccess ? [knownAccess] : ['public', 'private']
   let lastErr: unknown
   for (const access of order) {
     try {
