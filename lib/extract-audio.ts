@@ -59,8 +59,12 @@ export async function extractAudioAsMp3(file: File, onProgress: (pct: number) =>
   onProgress(100)
 
   const name = file.name.replace(/\.[^.]+$/, '') + '.mp3'
-  return {
-    file: new File(parts as BlobPart[], name, { type: 'audio/mpeg' }),
-    durationSec: audio.duration,
+  const out = new File(parts as BlobPart[], name, { type: 'audio/mpeg' })
+  if (out.size < 1024) {
+    throw new Error('Videoen har ingen hørbar lyd')
   }
+  // iOS Safari sometimes reports duration as 0/NaN for decoded video audio.
+  const candidates = [audio.duration, audio.length / audio.sampleRate, (out.size * 8) / 160_000]
+  const durationSec = candidates.find((d) => Number.isFinite(d) && d > 0.5) ?? 1
+  return { file: out, durationSec }
 }

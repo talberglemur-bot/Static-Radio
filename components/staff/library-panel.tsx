@@ -190,10 +190,12 @@ export function UploadForm({
           durationPromise = readDuration(file)
         }
         patchJob(i, { state: 'laster', pct: 0 })
-        const [durationSec, stored] = await Promise.all([
-          durationPromise,
+        const [rawDuration, stored] = await Promise.all([
+          durationPromise.catch(() => NaN),
           uploadToBlob(file, (pct) => patchJob(i, { pct })),
         ])
+        const durationSec =
+          Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : Math.max(1, (file.size * 8) / 192_000)
         await sendJson('/api/tracks', 'POST', {
           title: (files.length === 1 && title) || original.name.replace(/\.[^.]+$/, ''),
           artist,

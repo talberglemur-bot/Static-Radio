@@ -63,7 +63,8 @@ export async function POST(req: Request) {
     title = title.trim().slice(0, 120) || 'Untitled'
     artist = artist.trim().slice(0, 120) || 'Ukjent artist'
     if (kind !== 'music' && kind !== 'sfx' && kind !== 'ad') kind = 'music'
-    if (!Number.isFinite(durationSec) || durationSec <= 0) {
+    durationSec = Number(durationSec)
+  if (!Number.isFinite(durationSec) || durationSec <= 0) {
       return Response.json({ error: 'Kunne ikke lese lengden på sporet' }, { status: 400 })
     }
 
