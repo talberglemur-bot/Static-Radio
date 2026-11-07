@@ -1,0 +1,13 @@
+{
+  "name": "Static FM — Live radio",
+  "short_name": "Static FM",
+  "description": "Tune in to live radio channels with real hosts, song requests and live chat.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EDEEE9",
+  "theme_color": "#EDEEE9",
+  "icons": [
+    { "src": "/apple-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
