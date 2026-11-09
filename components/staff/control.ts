@@ -12,6 +12,7 @@ export type ControlAction =
   | { type: 'skip' | 'pause' | 'resume' | 'restart' }
   | { type: 'seek'; positionSec: number }
   | { type: 'volume'; value: number }
+  | { type: 'fx'; speed?: number; filter?: string }
   | { type: 'autoDj'; value: boolean }
   | { type: 'relay'; streamId: string | null }
   | { type: 'details'; name?: string; description?: string; ticker?: string }

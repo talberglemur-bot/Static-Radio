@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { DeckPanel } from './deck-panel'
 import { MicPanel } from './mic-panel'
 import { SfxPad } from './sfx-pad'
+import { FxPanel } from './fx-panel'
 import { LibraryPanel } from './library-panel'
 import { StationSettings } from './station-settings'
 import { RequestsAdmin } from './requests-admin'
@@ -114,7 +115,7 @@ export function StaffConsole({
               Spiller
             </TabsTrigger>
             <TabsTrigger value="mic" className="min-h-10">
-              Mikrofon
+              Mikrofon og FX
             </TabsTrigger>
             <TabsTrigger value="library" className="min-h-10">
               Bibliotek
@@ -143,6 +144,12 @@ export function StaffConsole({
           <TabsContent value="mic" className="flex flex-col gap-4">
             <MicPanel slug={slug} isLive={!!data?.live.isLive} host={data?.live.host ?? null} />
             <SfxPad slug={slug} engine={engine} />
+            <FxPanel
+              slug={slug}
+              speed={data?.channel.fx.speed ?? 1}
+              filter={data?.channel.fx.filter ?? 'none'}
+              relay={!!data?.channel.relay}
+            />
           </TabsContent>
 
           <TabsContent value="library" className="flex flex-col gap-4">
