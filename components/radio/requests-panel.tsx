@@ -13,6 +13,8 @@ export type SongRequest = {
   id: number
   userName: string
   body: string
+  artist: string | null
+  title: string | null
   status: 'pending' | 'queued' | 'played' | 'declined'
   createdAt: string
 }
@@ -40,16 +42,18 @@ export function useRequests(slug: string) {
 export function RequestsPanel({ slug }: { slug: string }) {
   const { me } = useMe()
   const { data: requests = [], mutate } = useRequests(slug)
-  const [text, setText] = useState('')
+  const [artist, setArtist] = useState('')
+  const [title, setTitle] = useState('')
   const [sending, setSending] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!text.trim() || sending) return
+    if (!artist.trim() || !title.trim() || sending) return
     setSending(true)
     try {
-      await sendJson(`/api/channels/${slug}/requests`, 'POST', { body: text })
-      setText('')
+      await sendJson(`/api/channels/${slug}/requests`, 'POST', { artist, title })
+      setArtist('')
+      setTitle('')
       toast.success('Ønsket er sendt til studio')
       mutate()
     } catch (err) {
@@ -62,23 +66,45 @@ export function RequestsPanel({ slug }: { slug: string }) {
   return (
     <div className="flex flex-col gap-4">
       {me ? (
-        <form onSubmit={submit} className="flex flex-col gap-2">
-          <label htmlFor={`req-${slug}`} className="text-sm font-medium">
-            Ønsk deg en låt
-          </label>
-          <div className="flex gap-2">
+        <form onSubmit={submit} className="flex flex-col gap-3">
+          <h3 className="text-sm font-medium">Ønsk deg en låt</h3>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`req-artist-${slug}`} className="text-xs text-muted-foreground">
+              Artist
+            </label>
             <input
-              id={`req-${slug}`}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={160}
-              placeholder="Artist – Låttittel"
-              className="h-11 min-w-0 flex-1 rounded-full border bg-card px-4 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              id={`req-artist-${slug}`}
+              value={artist}
+              onChange={(e) => setArtist(e.target.value)}
+              maxLength={80}
+              required
+              autoComplete="off"
+              placeholder="F.eks. Sigrid"
+              className="h-11 rounded-full border bg-card px-4 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-            <Button type="submit" className="h-11 rounded-full px-5" disabled={sending || !text.trim()}>
-              Send
-            </Button>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`req-title-${slug}`} className="text-xs text-muted-foreground">
+              Låttittel
+            </label>
+            <input
+              id={`req-title-${slug}`}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
+              required
+              autoComplete="off"
+              placeholder="F.eks. Strangers"
+              className="h-11 rounded-full border bg-card px-4 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <Button
+            type="submit"
+            className="h-11 rounded-full px-5"
+            disabled={sending || !artist.trim() || !title.trim()}
+          >
+            Send ønske
+          </Button>
         </form>
       ) : (
         <p className="text-sm text-muted-foreground">

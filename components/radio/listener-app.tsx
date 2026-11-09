@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { ArrowUpRight, Headphones, Info, Mic, Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -45,6 +46,28 @@ export function ListenerApp({ initialChannels }: { initialChannels: ChannelSumma
   const np = data?.nowPlaying
   const isLive = !!data?.live.isLive
   const progress = np ? position / Math.max(1, np.track.durationSec) : 0
+
+  const move = data?.move ?? null
+  const handledMoveRef = useRef<string | null>(null)
+  const { getServerNow } = engine
+  useEffect(() => {
+    if (!move || move.to === slug) return
+    const key = `${slug}:${move.to}:${move.at}`
+    if (handledMoveRef.current === key) return
+    const follow = () => {
+      handledMoveRef.current = key
+      const target = channels.find((c) => c.slug === move.to)
+      setSlug(move.to)
+      toast(`Du ble flyttet til ${target?.name ?? move.to}`)
+    }
+    const wait = move.at - getServerNow()
+    if (wait <= 0) {
+      follow()
+      return
+    }
+    const id = setTimeout(follow, wait)
+    return () => clearTimeout(id)
+  }, [move, slug, channels, getServerNow])
 
   function selectChannel(next: string) {
     if (next === slug && tunedIn) {

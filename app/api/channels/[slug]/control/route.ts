@@ -23,6 +23,8 @@ type Action =
   | { type: 'live'; on: boolean; mode?: 'duck' | 'pause' }
   | { type: 'adBreak'; items: AdItem[] }
   | { type: 'endAdBreak' }
+  | { type: 'moveListeners'; to: string; delaySec?: number }
+  | { type: 'cancelMove' }
 
 export async function POST(
   req: Request,
@@ -184,6 +186,20 @@ export async function POST(
           await db.insert(sfxEvent).values({ channelId: ch.id, kind: 'ad-stop' })
           await resumeChannel(ch, { adBreakUntil: null })
         }
+        break
+      case 'moveListeners': {
+        const target = await getChannelBySlug(String(action.to ?? ''))
+        if (!target || target.id === ch.id)
+          return Response.json({ error: 'Velg en annen kanal' }, { status: 400 })
+        const delay = Math.min(24 * 3600, Math.max(0, Math.round(Number(action.delaySec) || 0)))
+        await db
+          .update(channel)
+          .set({ moveToSlug: target.slug, moveAt: new Date(now.getTime() + delay * 1000) })
+          .where(eq(channel.id, ch.id))
+        break
+      }
+      case 'cancelMove':
+        await db.update(channel).set({ moveToSlug: null, moveAt: null }).where(eq(channel.id, ch.id))
         break
       default:
         return Response.json({ error: 'Ukjent handling' }, { status: 400 })
