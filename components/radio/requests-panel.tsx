@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
+import { Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { fetcher, sendJson } from '@/lib/fetcher'
@@ -42,17 +43,39 @@ function splitRequest(artist: string, title: string) {
 }
 
 export function useRequests(slug: string) {
-  return useSWR<SongRequest[]>(`/api/channels/${slug}/requests`, fetcher, {
-    refreshInterval: 5000,
-  })
+  const { me } = useMe()
+  // Key by user so one account's cached wishes never show up for another in the same tab.
+  return useSWR<SongRequest[]>(
+    me ? [`/api/channels/${slug}/requests`, me.id] : null,
+    ([url]: [string, string]) => fetcher<SongRequest[]>(url),
+    { refreshInterval: 5000 },
+  )
+}
+
+export async function clearRequests(slug: string, id?: number) {
+  return sendJson<{ cleared: number }>(`/api/channels/${slug}/requests`, 'DELETE', id ? { id } : {})
 }
 
 export function RequestsPanel({ slug }: { slug: string }) {
-  const { me } = useMe()
+  const { me, isStaff } = useMe()
   const { data: requests = [], mutate } = useRequests(slug)
   const [artist, setArtist] = useState('')
   const [title, setTitle] = useState('')
   const [sending, setSending] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
+  async function remove(id?: number) {
+    if (!id && !window.confirm(isStaff ? 'Tøm alle ønsker på kanalen?' : 'Fjerne alle ønskene dine?')) return
+    setClearing(true)
+    try {
+      await clearRequests(slug, id)
+      mutate()
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setClearing(false)
+    }
+  }
 
   const parsed = splitRequest(artist, title)
   const ready = Boolean(parsed.artist && parsed.title)
@@ -128,27 +151,57 @@ export function RequestsPanel({ slug }: { slug: string }) {
         </p>
       )}
 
-      <ul className="flex flex-col divide-y rounded-lg bg-card">
-        {requests.length === 0 && (
-          <li className="p-4 text-sm text-muted-foreground">Ingen ønsker ennå.</li>
-        )}
-        {requests.map((r) => (
-          <li key={r.id} className="flex items-center justify-between gap-3 p-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{r.body}</p>
-              <p className="text-xs text-muted-foreground">fra {r.userName}</p>
-            </div>
-            <span
-              className={cn(
-                'shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] uppercase',
-                STATUS_STYLE[r.status],
-              )}
+      {me && (
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">{isStaff ? 'Alle ønsker' : 'Dine ønsker'}</h3>
+          {requests.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 rounded-full px-3 text-muted-foreground"
+              disabled={clearing}
+              onClick={() => remove()}
             >
-              {STATUS_LABEL[r.status]}
-            </span>
-          </li>
-        ))}
-      </ul>
+              <Trash2 className="size-4" aria-hidden />
+              Tøm
+            </Button>
+          )}
+        </div>
+      )}
+
+      {me && (
+        <ul className="flex flex-col divide-y rounded-lg bg-card">
+          {requests.length === 0 && (
+            <li className="p-4 text-sm text-muted-foreground">Ingen ønsker ennå.</li>
+          )}
+          {requests.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-2 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{r.body}</p>
+                {isStaff && <p className="text-xs text-muted-foreground">fra {r.userName}</p>}
+              </div>
+              <span
+                className={cn(
+                  'shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] uppercase',
+                  STATUS_STYLE[r.status],
+                )}
+              >
+                {STATUS_LABEL[r.status]}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-9 shrink-0 text-muted-foreground"
+                disabled={clearing}
+                onClick={() => remove(r.id)}
+                aria-label={`Fjern ønsket ${r.body}`}
+              >
+                <X className="size-4" aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

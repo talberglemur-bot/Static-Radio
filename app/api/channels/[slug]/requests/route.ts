@@ -1,7 +1,13 @@
 import { and, desc, eq, gt } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { queueItem, songRequest } from '@/lib/db/schema'
-import { errorResponse, requireStaff, requireUser } from '@/lib/session'
+import {
+  errorResponse,
+  getSessionUser,
+  isStaff,
+  requireStaff,
+  requireUser,
+} from '@/lib/session'
 import { getChannelBySlug } from '@/lib/station'
 import { findOrImportSong } from '@/lib/song-finder'
 
@@ -13,9 +19,16 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  const noStore = { headers: { 'Cache-Control': 'no-store' } }
   const { slug } = await params
   const ch = await getChannelBySlug(slug)
   if (!ch) return Response.json({ error: 'Fant ikke kanalen' }, { status: 404 })
+  const u = await getSessionUser()
+  if (!u) return Response.json([], noStore)
+  // Listeners only ever see their own wishes; the studio sees everything.
+  const scope = isStaff(u)
+    ? eq(songRequest.channelId, ch.id)
+    : and(eq(songRequest.channelId, ch.id), eq(songRequest.userId, u.id))
   const rows = await db
     .select({
       id: songRequest.id,
@@ -27,10 +40,39 @@ export async function GET(
       createdAt: songRequest.createdAt,
     })
     .from(songRequest)
-    .where(eq(songRequest.channelId, ch.id))
+    .where(scope)
     .orderBy(desc(songRequest.id))
     .limit(40)
-  return Response.json(rows, { headers: { 'Cache-Control': 'no-store' } })
+  return Response.json(rows, noStore)
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  try {
+    const u = await requireUser()
+    const { slug } = await params
+    const ch = await getChannelBySlug(slug)
+    if (!ch) return Response.json({ error: 'Fant ikke kanalen' }, { status: 404 })
+    const json = await req.json().catch(() => ({}))
+    const id = json?.id != null ? Number(json.id) : null
+    if (id !== null && !Number.isInteger(id)) {
+      return Response.json({ error: 'Ugyldig ønske' }, { status: 400 })
+    }
+
+    const conditions = [eq(songRequest.channelId, ch.id)]
+    if (!isStaff(u)) conditions.push(eq(songRequest.userId, u.id))
+    if (id !== null) conditions.push(eq(songRequest.id, id))
+
+    const deleted = await db
+      .delete(songRequest)
+      .where(and(...conditions))
+      .returning({ id: songRequest.id })
+    return Response.json({ ok: true, cleared: deleted.length })
+  } catch (err) {
+    return errorResponse(err)
+  }
 }
 
 export async function POST(
