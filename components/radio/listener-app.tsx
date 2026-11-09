@@ -35,7 +35,9 @@ function ChannelArt({ slug, name, className }: { slug: string; name: string; cla
 
 export function ListenerApp({ initialChannels }: { initialChannels: ChannelSummary[] }) {
   const { data: channels = initialChannels } = useChannels(initialChannels)
-  const [slug, setSlug] = useState(initialChannels[0]?.slug ?? 'main')
+  const [slug, setSlug] = useState(
+    (initialChannels.find((c) => !c.isClosed) ?? initialChannels[0])?.slug ?? 'main',
+  )
   const [showVolume, setShowVolume] = useState(false)
   const { floaters, spawn } = useFloaters()
   const engine = useRadioEngine(slug, { onReaction: spawn })
@@ -70,6 +72,7 @@ export function ListenerApp({ initialChannels }: { initialChannels: ChannelSumma
   }, [move, slug, channels, getServerNow])
 
   function selectChannel(next: string) {
+    if (channels.find((c) => c.slug === next)?.isClosed) return
     if (next === slug && tunedIn) {
       tuneOut()
       return
@@ -122,6 +125,30 @@ export function ListenerApp({ initialChannels }: { initialChannels: ChannelSumma
               const nameColor = CHANNEL_COLORS[index % CHANNEL_COLORS.length]
               const row =
                 'flex min-h-11 w-full items-center justify-between gap-4 border-b border-border py-2.5 text-left text-lg text-accent transition-all duration-200 ease-out hover:pl-1 hover:text-foreground active:opacity-70'
+              if (c.isClosed) {
+                return (
+                  <section
+                    key={c.slug}
+                    aria-labelledby={`kanal-${c.slug}`}
+                    aria-disabled="true"
+                    className="flex animate-rise flex-col opacity-50 motion-reduce:animate-none"
+                    style={{ animationDelay: `${index * 80}ms` }}
+                  >
+                    <h2 id={`kanal-${c.slug}`} className="flex items-center gap-3 pb-2">
+                      <span className="flex items-baseline gap-2 text-3xl leading-none">
+                        <span className="font-black tracking-tighter">STATIC</span>
+                        <span className="font-normal text-muted-foreground line-through">{c.name}</span>
+                      </span>
+                      <span className="rounded-sm border border-border px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                        Stengt
+                      </span>
+                    </h2>
+                    <p className="flex min-h-11 items-center border-b border-border py-2.5 text-lg text-muted-foreground">
+                      Denne kanalen er avsluttet
+                    </p>
+                  </section>
+                )
+              }
               return (
                 <section
                   key={c.slug}

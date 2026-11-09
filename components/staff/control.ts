@@ -19,7 +19,7 @@ export type ControlAction =
   | { type: 'live'; on: boolean; mode?: 'duck' | 'pause' }
   | { type: 'adBreak'; items: AdItem[] }
   | { type: 'endAdBreak' }
-  | { type: 'moveListeners'; to: string; delaySec?: number }
+  | { type: 'moveListeners' | 'closeChannel'; to: string; delaySec?: number }
   | { type: 'cancelMove' }
 
 export async function control(slug: string, action: ControlAction) {

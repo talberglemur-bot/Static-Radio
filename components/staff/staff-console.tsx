@@ -135,6 +135,8 @@ export function StaffConsole({
               listeners={data?.listeners ?? 0}
               move={data?.move ?? null}
               getServerNow={engine.getServerNow}
+              closed={!!data?.channel.closed}
+              closesAt={data?.channel.closesAt ?? null}
             />
           </TabsContent>
 

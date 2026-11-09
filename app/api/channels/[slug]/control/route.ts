@@ -24,6 +24,7 @@ type Action =
   | { type: 'adBreak'; items: AdItem[] }
   | { type: 'endAdBreak' }
   | { type: 'moveListeners'; to: string; delaySec?: number }
+  | { type: 'closeChannel'; to: string; delaySec?: number }
   | { type: 'cancelMove' }
 
 export async function POST(
@@ -187,19 +188,30 @@ export async function POST(
           await resumeChannel(ch, { adBreakUntil: null })
         }
         break
-      case 'moveListeners': {
+      case 'moveListeners':
+      case 'closeChannel': {
         const target = await getChannelBySlug(String(action.to ?? ''))
         if (!target || target.id === ch.id)
           return Response.json({ error: 'Velg en annen kanal' }, { status: 400 })
+        if (target.closedAt && target.closedAt.getTime() <= now.getTime())
+          return Response.json({ error: 'Kan ikke flytte til en stengt kanal' }, { status: 400 })
         const delay = Math.min(24 * 3600, Math.max(0, Math.round(Number(action.delaySec) || 0)))
+        const at = new Date(now.getTime() + delay * 1000)
         await db
           .update(channel)
-          .set({ moveToSlug: target.slug, moveAt: new Date(now.getTime() + delay * 1000) })
+          .set({
+            moveToSlug: target.slug,
+            moveAt: at,
+            ...(action.type === 'closeChannel' ? { closedAt: at } : {}),
+          })
           .where(eq(channel.id, ch.id))
         break
       }
       case 'cancelMove':
-        await db.update(channel).set({ moveToSlug: null, moveAt: null }).where(eq(channel.id, ch.id))
+        await db
+          .update(channel)
+          .set({ moveToSlug: null, moveAt: null, closedAt: null })
+          .where(eq(channel.id, ch.id))
         break
       default:
         return Response.json({ error: 'Ukjent handling' }, { status: 400 })

@@ -81,6 +81,7 @@ export const channel = pgTable('channel', {
   relayUrl: text('relay_url'),
   moveToSlug: text('move_to_slug'),
   moveAt: tz('move_at'),
+  closedAt: tz('closed_at'),
   createdAt: tz('created_at').notNull().defaultNow(),
 })
 

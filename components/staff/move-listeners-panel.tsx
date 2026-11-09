@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useChannels } from '@/hooks/use-me'
 import { cn } from '@/lib/utils'
 import { control } from './control'
 
@@ -33,16 +34,29 @@ export function MoveListenersPanel({
   listeners,
   move,
   getServerNow,
+  closed = false,
+  closesAt = null,
 }: {
   slug: string
   channels: ChannelOption[]
   listeners: number
   move: { to: string; at: number } | null
   getServerNow: () => number
+  closed?: boolean
+  closesAt?: number | null
 }) {
-  const others = channels.filter((c) => c.slug !== slug)
+  const { data: summaries } = useChannels()
+  const closedSlugs = useMemo(
+    () => new Set((summaries ?? []).filter((c) => c.isClosed).map((c) => c.slug)),
+    [summaries],
+  )
+  const others = useMemo(
+    () => channels.filter((c) => c.slug !== slug && !closedSlugs.has(c.slug)),
+    [channels, slug, closedSlugs],
+  )
   const [to, setTo] = useState(others[0]?.slug ?? '')
   const [delay, setDelay] = useState(0)
+  const [closeAfter, setCloseAfter] = useState(false)
   const [busy, setBusy] = useState(false)
   const left = useCountdown(move?.at ?? null, getServerNow)
   const target = channels.find((c) => c.slug === (move?.to ?? to))
@@ -57,7 +71,10 @@ export function MoveListenersPanel({
     setBusy(false)
   }
 
-  if (!others.length) return null
+  if (!others.length && !move && !closed) return null
+
+  const closing = !!closesAt
+  const timeLeft = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border bg-card p-4" aria-labelledby="move-heading">
@@ -69,15 +86,29 @@ export function MoveListenersPanel({
         <span className="font-mono text-xs text-muted-foreground">{listeners} lytter nå</span>
       </div>
 
-      {move ? (
+      {closed ? (
+        <div className="flex flex-col gap-3 rounded-xl bg-muted p-3">
+          <p className="text-sm text-pretty" aria-live="polite">
+            Kanalen er <strong>stengt</strong>. Lyttere sendes til{' '}
+            <strong>{target?.name ?? move?.to ?? 'en annen kanal'}</strong> og kan ikke velge denne kanalen.
+          </p>
+          <Button
+            variant="outline"
+            className="h-11 rounded-full"
+            disabled={busy}
+            onClick={() => run({ type: 'cancelMove' })}
+          >
+            Åpne kanalen igjen
+          </Button>
+        </div>
+      ) : move ? (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-muted p-3">
           <p className="text-sm text-pretty" aria-live="polite">
             {left > 0 ? (
               <>
-                Flytter alle til <strong>{target?.name ?? move.to}</strong> om{' '}
-                <span className="font-mono tabular-nums">
-                  {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
-                </span>
+                {closing ? 'Stenger kanalen og flytter' : 'Flytter'} alle til{' '}
+                <strong>{target?.name ?? move.to}</strong> om{' '}
+                <span className="font-mono tabular-nums">{timeLeft}</span>
               </>
             ) : (
               <>
@@ -91,7 +122,7 @@ export function MoveListenersPanel({
             className="size-11 shrink-0"
             disabled={busy}
             onClick={() => run({ type: 'cancelMove' })}
-            aria-label="Avbryt flytting"
+            aria-label={closing ? 'Avbryt stenging' : 'Avbryt flytting'}
           >
             <X className="size-4" />
           </Button>
@@ -131,12 +162,33 @@ export function MoveListenersPanel({
               ))}
             </div>
           </fieldset>
+          <label className="flex min-h-11 items-start gap-3 rounded-xl border bg-background p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={closeAfter}
+              onChange={(e) => setCloseAfter(e.target.checked)}
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium">Avslutt denne kanalen</span>
+              <span className="text-muted-foreground text-pretty">
+                Kanalen stenges og lyttere kan ikke velge den før du åpner den igjen.
+              </span>
+            </span>
+          </label>
           <Button
             className="h-12 rounded-full"
+            variant={closeAfter ? 'destructive' : 'default'}
             disabled={busy || !to}
-            onClick={() => run({ type: 'moveListeners', to, delaySec: delay })}
+            onClick={() => run({ type: closeAfter ? 'closeChannel' : 'moveListeners', to, delaySec: delay })}
           >
-            {delay === 0 ? 'Flytt alle lyttere nå' : 'Planlegg flytting'}
+            {closeAfter
+              ? delay === 0
+                ? 'Steng kanalen og flytt lyttere nå'
+                : 'Planlegg stenging'
+              : delay === 0
+                ? 'Flytt alle lyttere nå'
+                : 'Planlegg flytting'}
           </Button>
         </>
       )}

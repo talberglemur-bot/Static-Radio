@@ -17,6 +17,7 @@ export type ChannelSummary = {
   frequency: string
   description: string
   isLive: boolean
+  isClosed: boolean
   trackTitle: string | null
   trackArtist: string | null
 }

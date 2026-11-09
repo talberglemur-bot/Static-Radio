@@ -13,6 +13,7 @@ export async function GET() {
       description: channel.description,
       isLive: channel.isLive,
       liveUpdatedAt: channel.liveUpdatedAt,
+      closedAt: channel.closedAt,
       trackTitle: track.title,
       trackArtist: track.artist,
     })
@@ -21,8 +22,9 @@ export async function GET() {
     .orderBy(asc(channel.frequency))
   const now = Date.now()
   return Response.json(
-    rows.map(({ liveUpdatedAt, ...r }) => ({
+    rows.map(({ liveUpdatedAt, closedAt, ...r }) => ({
       ...r,
+      isClosed: !!closedAt && closedAt.getTime() <= now,
       isLive: r.isLive && !!liveUpdatedAt && now - liveUpdatedAt.getTime() < 12_000,
     })),
   )
