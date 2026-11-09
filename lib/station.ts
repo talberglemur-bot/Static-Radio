@@ -119,7 +119,12 @@ export async function advanceIfNeeded(channelId: number, force = false) {
 
 export async function getStationState(
   slug: string,
-  opts: { listenerId?: string; sinceSfx?: number; sinceChunk?: number },
+  opts: {
+    listenerId?: string
+    listenerUser?: { id: string; name: string }
+    sinceSfx?: number
+    sinceChunk?: number
+  },
 ) {
   const found = await getChannelBySlug(slug)
   if (!found) return null
@@ -128,12 +133,14 @@ export async function getStationState(
   const now = Date.now()
 
   if (opts.listenerId) {
+    const userId = opts.listenerUser?.id ?? null
+    const userName = opts.listenerUser?.name ?? null
     await db
       .insert(listenerPresence)
-      .values({ listenerId: opts.listenerId, channelId: ch.id })
+      .values({ listenerId: opts.listenerId, channelId: ch.id, userId, userName })
       .onConflictDoUpdate({
         target: listenerPresence.listenerId,
-        set: { channelId: ch.id, lastSeen: new Date(now) },
+        set: { channelId: ch.id, userId, userName, lastSeen: new Date(now) },
       })
   }
 
@@ -238,9 +245,11 @@ export async function getStationState(
     if (s) relay = { id: s.id, name: s.name, src: s.src }
   }
 
+  const closed = !!ch.closedAt && ch.closedAt.getTime() <= now
   // A move only affects people tuned in when it fires; it expires so latecomers stay put.
+  // A closed channel keeps redirecting forever so nobody can stay on it.
   const move =
-    ch.moveToSlug && ch.moveAt && now - ch.moveAt.getTime() < MOVE_WINDOW_MS
+    ch.moveToSlug && ch.moveAt && (closed || now - ch.moveAt.getTime() < MOVE_WINDOW_MS)
       ? { to: ch.moveToSlug, at: ch.moveAt.getTime() }
       : null
 
@@ -262,6 +271,8 @@ export async function getStationState(
       autoDj: ch.autoDj,
       paused: !!ch.pausedAt,
       relay,
+      closed,
+      closesAt: ch.closedAt?.getTime() ?? null,
     },
     nowPlaying: current
       ? {

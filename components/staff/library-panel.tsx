@@ -15,6 +15,7 @@ import { control, type LibraryTrack } from './control'
 import { SongSearch } from './song-search'
 
 const MULTIPART_FROM = 8 * 1024 * 1024
+const CLIP_SECONDS = 30
 
 const EXT_TYPES: Record<string, string> = {
   mp3: 'audio/mpeg',
@@ -165,6 +166,8 @@ export function UploadForm({
   const [artist, setArtist] = useState('')
   const [pickedKind, setKind] = useState<TrackKind>('music')
   const kind = fixedKind ?? pickedKind
+  const [length, setLength] = useState<'full' | 'clip'>('full')
+  const clip = kind === 'music' && length === 'clip'
   const [busy, setBusy] = useState(false)
   const [jobs, setJobs] = useState<Job[]>([])
 
@@ -195,8 +198,9 @@ export function UploadForm({
           durationPromise.catch(() => NaN),
           uploadToBlob(file, (pct) => patchJob(i, { pct })),
         ])
-        const durationSec =
+        const fullDuration =
           Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : Math.max(1, (file.size * 8) / 192_000)
+        const durationSec = clip ? Math.min(CLIP_SECONDS, fullDuration) : fullDuration
         await sendJson('/api/tracks', 'POST', {
           title: (files.length === 1 && title) || original.name.replace(/\.[^.]+$/, ''),
           artist,
@@ -279,6 +283,34 @@ export function UploadForm({
           ))}
         </div>
       </fieldset>
+      )}
+      {kind === 'music' && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium">Lengde</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ['full', 'Hele låta'],
+              ['clip', '30 sek klipp'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={length === value}
+                onClick={() => setLength(value)}
+                disabled={busy}
+                className={cn(
+                  'min-h-11 rounded-lg border text-sm font-medium',
+                  length === value ? 'border-foreground bg-accent text-accent-foreground' : 'bg-background',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {length === 'clip' ? 'Bare de første 30 sekundene spilles på lufta.' : 'Hele låta spilles fra start til slutt.'}
+          </p>
+        </fieldset>
       )}
       {jobs.length > 0 && (
         <ul className="flex flex-col gap-2" aria-live="polite">

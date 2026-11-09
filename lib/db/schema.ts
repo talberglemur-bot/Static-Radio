@@ -81,6 +81,7 @@ export const channel = pgTable('channel', {
   relayUrl: text('relay_url'),
   moveToSlug: text('move_to_slug'),
   moveAt: tz('move_at'),
+  closedAt: tz('closed_at'),
   createdAt: tz('created_at').notNull().defaultNow(),
 })
 
@@ -154,5 +155,7 @@ export const songRequest = pgTable('song_request', {
 export const listenerPresence = pgTable('listener_presence', {
   listenerId: text('listener_id').primaryKey(),
   channelId: integer('channel_id').notNull(),
+  userId: text('user_id'),
+  userName: text('user_name'),
   lastSeen: tz('last_seen').notNull().defaultNow(),
 })

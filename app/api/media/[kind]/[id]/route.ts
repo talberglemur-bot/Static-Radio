@@ -2,11 +2,13 @@ import { get } from '@vercel/blob'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { liveChunk, track } from '@/lib/db/schema'
+import { getSessionUser } from '@/lib/session'
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ kind: string; id: string }> },
 ) {
+  if (!(await getSessionUser())) return new Response('Du må logge på', { status: 401 })
   const { kind, id } = await params
   const numericId = Number(id)
   if (!Number.isInteger(numericId)) return new Response('Fant ikke', { status: 404 })
