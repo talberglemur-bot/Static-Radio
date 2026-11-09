@@ -18,6 +18,27 @@ function normalise(s: string) {
   return s.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 }
 
+function words(s: string) {
+  return normalise(s)
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => (w.length > 3 ? w.replace(/s$/, '') : w))
+}
+
+function overlap(a: string, b: string) {
+  const wa = words(a)
+  const wb = new Set(words(b))
+  if (!wa.length) return 0
+  return wa.filter((w) => wb.has(w)).length / wa.length
+}
+
+function matchScore(song: ItunesSong, artist: string, title: string) {
+  const artistScore = overlap(artist, song.artistName)
+  const titleScore = overlap(title, song.trackName)
+  const live = /\b(live|remix|karaoke|instrumental)\b/i.test(song.trackName) ? 0.15 : 0
+  return artistScore * 0.6 + titleScore * 0.4 - live
+}
+
 async function searchItunes(artist: string, title: string): Promise<ItunesSong | null> {
   const term = encodeURIComponent(`${artist} ${title}`)
   for (const country of ['NO', 'US']) {
@@ -29,13 +50,10 @@ async function searchItunes(artist: string, title: string): Promise<ItunesSong |
     const json = (await res.json()) as { results?: ItunesSong[] }
     const songs = (json.results ?? []).filter((s) => s.previewUrl)
     if (!songs.length) continue
-    const a = normalise(artist)
-    const t = normalise(title)
-    const best =
-      songs.find((s) => normalise(s.artistName).includes(a) && normalise(s.trackName).includes(t)) ??
-      songs.find((s) => normalise(s.trackName).includes(t)) ??
-      songs[0]
-    return best
+    const best = songs
+      .map((s, i) => ({ s, score: matchScore(s, artist, title) - i * 0.01 }))
+      .sort((x, y) => y.score - x.score)[0]
+    if (best && best.score > 0.3) return best.s
   }
   return null
 }
