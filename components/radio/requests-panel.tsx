@@ -33,6 +33,14 @@ const STATUS_LABEL: Record<SongRequest['status'], string> = {
   declined: 'Avslått',
 }
 
+function splitRequest(artist: string, title: string) {
+  const a = artist.trim()
+  const t = title.trim()
+  if (t) return { artist: a, title: t }
+  const [first, ...rest] = a.split(/\s*[-–—]\s+|\s+[-–—]\s*/)
+  return rest.length ? { artist: first.trim(), title: rest.join(' - ').trim() } : { artist: a, title: '' }
+}
+
 export function useRequests(slug: string) {
   return useSWR<SongRequest[]>(`/api/channels/${slug}/requests`, fetcher, {
     refreshInterval: 5000,
@@ -46,12 +54,15 @@ export function RequestsPanel({ slug }: { slug: string }) {
   const [title, setTitle] = useState('')
   const [sending, setSending] = useState(false)
 
+  const parsed = splitRequest(artist, title)
+  const ready = Boolean(parsed.artist && parsed.title)
+
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!artist.trim() || !title.trim() || sending) return
+    if (!ready || sending) return
     setSending(true)
     try {
-      await sendJson(`/api/channels/${slug}/requests`, 'POST', { artist, title })
+      await sendJson(`/api/channels/${slug}/requests`, 'POST', parsed)
       setArtist('')
       setTitle('')
       toast.success('Ønsket er sendt til studio')
@@ -92,7 +103,6 @@ export function RequestsPanel({ slug }: { slug: string }) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={80}
-              required
               autoComplete="off"
               placeholder="F.eks. Strangers"
               className="h-11 rounded-full border bg-card px-4 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -101,10 +111,13 @@ export function RequestsPanel({ slug }: { slug: string }) {
           <Button
             type="submit"
             className="h-11 rounded-full px-5"
-            disabled={sending || !artist.trim() || !title.trim()}
+            disabled={sending || !ready}
           >
             Send ønske
           </Button>
+          <p className="text-xs text-muted-foreground">
+            Du kan også skrive «Artist - Låt» i artistfeltet.
+          </p>
         </form>
       ) : (
         <p className="text-sm text-muted-foreground">

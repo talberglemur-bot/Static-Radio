@@ -43,8 +43,17 @@ export async function POST(
     const ch = await getChannelBySlug(slug)
     if (!ch) return Response.json({ error: 'Fant ikke kanalen' }, { status: 404 })
     const json = await req.json()
-    const artist = String(json.artist ?? '').trim().slice(0, 80)
-    const title = String(json.title ?? '').trim().slice(0, 80)
+    let artist = String(json.artist ?? json.body ?? '').trim()
+    let title = String(json.title ?? '').trim()
+    if (!title) {
+      const [a, ...rest] = artist.split(/\s*[-–—]\s+|\s+[-–—]\s*/)
+      if (rest.length) {
+        artist = a.trim()
+        title = rest.join(' - ').trim()
+      }
+    }
+    artist = artist.slice(0, 80)
+    title = title.slice(0, 80)
     if (!artist || !title) {
       return Response.json({ error: 'Skriv både artist og låttittel' }, { status: 400 })
     }
