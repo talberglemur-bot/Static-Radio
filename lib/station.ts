@@ -59,6 +59,7 @@ export async function advanceIfNeeded(channelId: number, force = false) {
       .where(eq(channel.id, channelId))
       .for('update')
     if (!ch) return null
+    if (ch.relayUrl) return ch
 
     const now = Date.now()
     let current: Track | undefined
@@ -274,7 +275,8 @@ export async function getStationState(
       closed,
       closesAt: ch.closedAt?.getTime() ?? null,
     },
-    nowPlaying: current
+    // While relaying NRK, our own songs are off the air and must not be shown.
+    nowPlaying: current && !relay
       ? {
           track: publicTrack(current),
           startedAt: ch.startedAt?.getTime() ?? now,
@@ -282,7 +284,7 @@ export async function getStationState(
           positionSec: positionSec(ch, now),
         }
       : null,
-    upNext: upNext.map((r) => ({ queueId: r.queueId, ...publicTrack(r.track) })),
+    upNext: relay ? [] : upNext.map((r) => ({ queueId: r.queueId, ...publicTrack(r.track) })),
     live: {
       isLive,
       host: isLive ? ch.liveHost : null,

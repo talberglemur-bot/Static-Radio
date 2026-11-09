@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { channel, track } from '@/lib/db/schema'
+import { channel, relayStation, track } from '@/lib/db/schema'
 import { redirect } from 'next/navigation'
 import { getSessionUser } from '@/lib/session'
 import { ListenerApp } from '@/components/radio/listener-app'
@@ -20,9 +20,11 @@ export default async function Page() {
       closedAt: channel.closedAt,
       trackTitle: track.title,
       trackArtist: track.artist,
+      relayName: relayStation.name,
     })
     .from(channel)
     .leftJoin(track, eq(track.id, channel.currentTrackId))
+    .leftJoin(relayStation, eq(relayStation.id, channel.relayUrl))
     .orderBy(asc(channel.frequency))
 
   const now = Date.now()
@@ -30,6 +32,8 @@ export default async function Page() {
     <ListenerApp
       initialChannels={rows.map(({ closedAt, ...r }) => ({
         ...r,
+        trackTitle: r.relayName ? null : r.trackTitle,
+        trackArtist: r.relayName ? null : r.trackArtist,
         isLive: false,
         isClosed: !!closedAt && closedAt.getTime() <= now,
       }))}

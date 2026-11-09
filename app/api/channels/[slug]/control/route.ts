@@ -110,7 +110,16 @@ export async function POST(
           if (!s) return Response.json({ error: 'Fant ikke NRK-kanalen' }, { status: 404 })
           id = s.id
         }
-        await db.update(channel).set({ relayUrl: id }).where(eq(channel.id, ch.id))
+        if (id) {
+          // Switching to NRK takes our own song off the air entirely.
+          await db
+            .update(channel)
+            .set({ relayUrl: id, currentTrackId: null, startedAt: null, pausedAt: null })
+            .where(eq(channel.id, ch.id))
+        } else {
+          await db.update(channel).set({ relayUrl: null }).where(eq(channel.id, ch.id))
+          if (ch.relayUrl) await advanceIfNeeded(ch.id, true)
+        }
         break
       }
       case 'details': {

@@ -20,6 +20,7 @@ export type ChannelSummary = {
   isClosed: boolean
   trackTitle: string | null
   trackArtist: string | null
+  relayName?: string | null
 }
 
 export function useChannels(fallbackData?: ChannelSummary[]) {

@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { channel, track } from '@/lib/db/schema'
+import { channel, relayStation, track } from '@/lib/db/schema'
 import { errorResponse, requireAdmin } from '@/lib/session'
 
 export async function GET() {
@@ -16,14 +16,18 @@ export async function GET() {
       closedAt: channel.closedAt,
       trackTitle: track.title,
       trackArtist: track.artist,
+      relayName: relayStation.name,
     })
     .from(channel)
     .leftJoin(track, eq(track.id, channel.currentTrackId))
+    .leftJoin(relayStation, eq(relayStation.id, channel.relayUrl))
     .orderBy(asc(channel.frequency))
   const now = Date.now()
   return Response.json(
     rows.map(({ liveUpdatedAt, closedAt, ...r }) => ({
       ...r,
+      trackTitle: r.relayName ? null : r.trackTitle,
+      trackArtist: r.relayName ? null : r.trackArtist,
       isClosed: !!closedAt && closedAt.getTime() <= now,
       isLive: r.isLive && !!liveUpdatedAt && now - liveUpdatedAt.getTime() < 12_000,
     })),

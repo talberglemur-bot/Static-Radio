@@ -120,8 +120,12 @@ export function ListenerApp({ initialChannels }: { initialChannels: ChannelSumma
               const nowLine = active
                 ? isLive
                   ? `${data?.live.host ?? 'Programleder'} er på lufta`
-                  : (np?.track.title ?? c.description)
-                : (c.trackTitle ?? c.description)
+                  : data?.channel.relay
+                    ? `Direkte fra ${data.channel.relay.name}`
+                    : (np?.track.title ?? c.description)
+                : c.relayName
+                  ? `Direkte fra ${c.relayName}`
+                  : (c.trackTitle ?? c.description)
               const nameColor = CHANNEL_COLORS[index % CHANNEL_COLORS.length]
               const row =
                 'flex min-h-11 w-full items-center justify-between gap-4 border-b border-border py-2.5 text-left text-lg text-accent transition-all duration-200 ease-out hover:pl-1 hover:text-foreground active:opacity-70'
@@ -258,9 +262,15 @@ export function ListenerApp({ initialChannels }: { initialChannels: ChannelSumma
 
             <div className="flex flex-col gap-3">
               <div className="min-w-0">
-                <p className="truncate text-lg font-semibold">{np ? np.track.title : 'Stille på lufta'}</p>
+                <p className="truncate text-lg font-semibold">
+                  {np ? np.track.title : data?.channel.relay ? data.channel.relay.name : 'Stille på lufta'}
+                </p>
                 <p className="truncate text-sm text-muted-foreground">
-                  {np ? np.track.artist : 'Ingen låter i rotasjon ennå. Følg med.'}
+                  {np
+                    ? np.track.artist
+                    : data?.channel.relay
+                      ? 'Direktesending'
+                      : 'Ingen låter i rotasjon ennå. Følg med.'}
                 </p>
               </div>
               {np && <TrackProgress position={position} duration={np.track.durationSec} tone="panel" />}
@@ -373,7 +383,13 @@ export function ListenerApp({ initialChannels }: { initialChannels: ChannelSumma
               <span className="truncate font-semibold text-accent">{channel?.name}</span>
             </span>
             <span className="truncate text-sm font-semibold">
-              {isLive ? `${data?.live.host} på lufta` : (np?.track.title ?? 'Stille på lufta')}
+              {isLive
+                ? `${data?.live.host} på lufta`
+                : data?.adBreak
+                  ? 'Reklamepause'
+                  : data?.channel.relay
+                    ? `Direkte fra ${data.channel.relay.name}`
+                    : (np?.track.title ?? 'Stille på lufta')}
             </span>
           </div>
           <button
