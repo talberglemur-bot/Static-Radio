@@ -68,7 +68,8 @@ export function SongSearch({ slug, onAdded }: { slug: string; onAdded: () => voi
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold">Finn låt på nettet</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Søk, og legg låta rett i biblioteket. Du får et 30 sekunders utdrag.
+          Søk, og legg låta rett i biblioteket. Låter fra nettet er alltid 30 sekunders klipp – vil du ha hele
+          låta, last opp lydfila under «Legg til lyd» og velg «Hele låta».
         </p>
       </div>
       <form onSubmit={search} className="flex gap-2">

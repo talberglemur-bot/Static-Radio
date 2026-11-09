@@ -310,6 +310,18 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
     if (el.paused) el.play().then(() => setBlocked(false)).catch(() => setBlocked(true))
   }, [data, tunedIn, volume, playVoice, playSfx, playNextVoice, stopAds])
 
+  const trackLimitSec = data?.nowPlaying?.track.durationSec
+  useEffect(() => {
+    const el = musicRef.current
+    if (!el || !trackLimitSec) return
+    // Clipped tracks are shorter than their audio file, so cut them off at the stored length.
+    const onTime = () => {
+      if (!el.dataset.ad && !el.dataset.relay && el.currentTime >= trackLimitSec) el.pause()
+    }
+    el.addEventListener('timeupdate', onTime)
+    return () => el.removeEventListener('timeupdate', onTime)
+  }, [trackLimitSec])
+
   useEffect(() => {
     const el = voiceRef.current
     if (!el) return
