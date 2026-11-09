@@ -1,10 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { channel, queueItem, sfxEvent, track } from '@/lib/db/schema'
+import { channel, queueItem, relayStation, sfxEvent, track } from '@/lib/db/schema'
 import { errorResponse, requireStaff } from '@/lib/session'
 import { advanceIfNeeded, getChannelBySlug, resumeChannel } from '@/lib/station'
 import { BUILT_IN_SFX } from '@/lib/sfx-catalog'
-import { NRK_STREAMS } from '@/lib/nrk-streams'
 import { buildAdTimeline, decodeAdItems, encodeAdItems, type AdItem } from '@/lib/ad-catalog'
 
 type Action =
@@ -24,6 +23,8 @@ type Action =
   | { type: 'live'; on: boolean; mode?: 'duck' | 'pause' }
   | { type: 'adBreak'; items: AdItem[] }
   | { type: 'endAdBreak' }
+  | { type: 'moveListeners'; to: string; delaySec?: number }
+  | { type: 'cancelMove' }
 
 export async function POST(
   req: Request,
@@ -102,7 +103,12 @@ export async function POST(
         await db.update(channel).set({ autoDj: !!action.value }).where(eq(channel.id, ch.id))
         break
       case 'relay': {
-        const id = action.streamId && NRK_STREAMS.some((s) => s.id === action.streamId) ? action.streamId : null
+        let id: string | null = null
+        if (action.streamId) {
+          const [s] = await db.select().from(relayStation).where(eq(relayStation.id, String(action.streamId)))
+          if (!s) return Response.json({ error: 'Fant ikke NRK-kanalen' }, { status: 404 })
+          id = s.id
+        }
         await db.update(channel).set({ relayUrl: id }).where(eq(channel.id, ch.id))
         break
       }
@@ -180,6 +186,20 @@ export async function POST(
           await db.insert(sfxEvent).values({ channelId: ch.id, kind: 'ad-stop' })
           await resumeChannel(ch, { adBreakUntil: null })
         }
+        break
+      case 'moveListeners': {
+        const target = await getChannelBySlug(String(action.to ?? ''))
+        if (!target || target.id === ch.id)
+          return Response.json({ error: 'Velg en annen kanal' }, { status: 400 })
+        const delay = Math.min(24 * 3600, Math.max(0, Math.round(Number(action.delaySec) || 0)))
+        await db
+          .update(channel)
+          .set({ moveToSlug: target.slug, moveAt: new Date(now.getTime() + delay * 1000) })
+          .where(eq(channel.id, ch.id))
+        break
+      }
+      case 'cancelMove':
+        await db.update(channel).set({ moveToSlug: null, moveAt: null }).where(eq(channel.id, ch.id))
         break
       default:
         return Response.json({ error: 'Ukjent handling' }, { status: 400 })

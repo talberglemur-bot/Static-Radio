@@ -79,6 +79,16 @@ export const channel = pgTable('channel', {
   liveMode: text('live_mode').notNull().default('duck'),
   adBreakUntil: tz('ad_break_until'),
   relayUrl: text('relay_url'),
+  moveToSlug: text('move_to_slug'),
+  moveAt: tz('move_at'),
+  createdAt: tz('created_at').notNull().defaultNow(),
+})
+
+export const relayStation = pgTable('relay_station', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  src: text('src').notNull(),
+  sort: integer('sort').notNull().default(0),
   createdAt: tz('created_at').notNull().defaultNow(),
 })
 
@@ -98,6 +108,7 @@ export const queueItem = pgTable('queue_item', {
   id: serial('id').primaryKey(),
   channelId: integer('channel_id').notNull(),
   trackId: integer('track_id').notNull(),
+  priority: integer('priority').notNull().default(0),
   createdAt: tz('created_at').notNull().defaultNow(),
 })
 
@@ -133,6 +144,9 @@ export const songRequest = pgTable('song_request', {
   userId: text('user_id').notNull(),
   userName: text('user_name').notNull(),
   body: text('body').notNull(),
+  artist: text('artist'),
+  title: text('title'),
+  trackId: integer('track_id'),
   status: text('status').notNull().default('pending'),
   createdAt: tz('created_at').notNull().defaultNow(),
 })

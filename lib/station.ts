@@ -6,14 +6,16 @@ import {
   listenerPresence,
   liveChunk,
   queueItem,
+  relayStation,
   sfxEvent,
+  songRequest,
   track,
 } from '@/lib/db/schema'
 import { removeFile } from '@/lib/storage'
-import { NRK_STREAMS } from '@/lib/nrk-streams'
 
 export const LIVE_TIMEOUT_MS = 12_000
 const PRESENCE_WINDOW_MS = 20_000
+const MOVE_WINDOW_MS = 30_000
 
 export type Channel = typeof channel.$inferSelect
 export type Track = typeof track.$inferSelect
@@ -76,13 +78,17 @@ export async function advanceIfNeeded(channelId: number, force = false) {
       .select()
       .from(queueItem)
       .where(eq(queueItem.channelId, ch.id))
-      .orderBy(asc(queueItem.id))
+      .orderBy(desc(queueItem.priority), asc(queueItem.id))
       .limit(1)
 
     let nextTrackId: number | null = null
     if (next) {
       await tx.delete(queueItem).where(eq(queueItem.id, next.id))
       nextTrackId = next.trackId
+      await tx
+        .update(songRequest)
+        .set({ status: 'played' })
+        .where(and(eq(songRequest.trackId, next.trackId), eq(songRequest.status, 'queued')))
     } else if (ch.autoDj) {
       const [pick] = await tx
         .select({ id: track.id })
@@ -140,7 +146,7 @@ export async function getStationState(
     .from(queueItem)
     .innerJoin(track, eq(track.id, queueItem.trackId))
     .where(eq(queueItem.channelId, ch.id))
-    .orderBy(asc(queueItem.id))
+    .orderBy(desc(queueItem.priority), asc(queueItem.id))
     .limit(20)
 
   const [{ count }] = await db
@@ -226,6 +232,18 @@ export async function getStationState(
     }
   }
 
+  let relay: { id: string; name: string; src: string } | null = null
+  if (ch.relayUrl) {
+    const [s] = await db.select().from(relayStation).where(eq(relayStation.id, ch.relayUrl))
+    if (s) relay = { id: s.id, name: s.name, src: s.src }
+  }
+
+  // A move only affects people tuned in when it fires; it expires so latecomers stay put.
+  const move =
+    ch.moveToSlug && ch.moveAt && now - ch.moveAt.getTime() < MOVE_WINDOW_MS
+      ? { to: ch.moveToSlug, at: ch.moveAt.getTime() }
+      : null
+
   const isLive =
     ch.isLive &&
     !!ch.liveUpdatedAt &&
@@ -243,7 +261,7 @@ export async function getStationState(
       musicVolume: ch.musicVolume,
       autoDj: ch.autoDj,
       paused: !!ch.pausedAt,
-      relay: ch.relayUrl ? NRK_STREAMS.find((s) => s.id === ch.relayUrl) ?? null : null,
+      relay,
     },
     nowPlaying: current
       ? {
@@ -260,6 +278,7 @@ export async function getStationState(
       mode: (ch.liveMode === 'pause' ? 'pause' : 'duck') as 'pause' | 'duck',
     },
     adBreak,
+    move,
     listeners: count,
     latestSfxId: latestSfx?.id ?? 0,
     latestChunkId: latestChunk?.id ?? 0,

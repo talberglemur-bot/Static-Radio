@@ -12,6 +12,7 @@ import { fetcher, formatTime, sendJson } from '@/lib/fetcher'
 import { cn } from '@/lib/utils'
 import { extractAudioAsMp3, isVideoFile } from '@/lib/extract-audio'
 import { control, type LibraryTrack } from './control'
+import { SongSearch } from './song-search'
 
 const MULTIPART_FROM = 8 * 1024 * 1024
 
@@ -430,6 +431,7 @@ export function LibraryPanel({ slug }: { slug: string }) {
 
   return (
     <>
+      <SongSearch slug={slug} onAdded={() => mutate()} />
       <UploadForm onDone={() => mutate()} />
       <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
         <div className="flex items-center justify-between gap-2">

@@ -17,6 +17,7 @@ import { TeamPanel } from './team-panel'
 import { AdBreakPanel } from './ad-break-panel'
 import { RelayPanel } from './relay-panel'
 import { NewChannelForm } from './new-channel-form'
+import { MoveListenersPanel } from './move-listeners-panel'
 
 type ChannelOption = { slug: string; name: string; frequency: string }
 
@@ -126,6 +127,13 @@ export function StaffConsole({
             <DeckPanel slug={slug} engine={engine} />
             <AdBreakPanel slug={slug} onBreak={!!data?.adBreak} />
             <RelayPanel slug={slug} activeId={data?.channel.relay?.id ?? null} />
+            <MoveListenersPanel
+              slug={slug}
+              channels={channels}
+              listeners={data?.listeners ?? 0}
+              move={data?.move ?? null}
+              getServerNow={engine.getServerNow}
+            />
           </TabsContent>
 
           <TabsContent value="mic" className="flex flex-col gap-4">
@@ -139,7 +147,7 @@ export function StaffConsole({
 
           <TabsContent value="station" className="flex flex-col gap-4">
             {data && <StationSettings key={slug} slug={slug} channel={data.channel} />}
-            <RequestsAdmin slug={slug} />
+            <RequestsAdmin slug={slug} channels={channels} />
             <section className="flex h-[28rem] flex-col overflow-hidden rounded-2xl border bg-card">
               <h2 className="border-b px-4 py-3 text-sm font-semibold">Livechat</h2>
               <ChatPanel slug={slug} moderate />
