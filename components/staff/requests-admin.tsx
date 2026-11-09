@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Loader2, Play, X } from 'lucide-react'
+import { Check, Loader2, Play, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { mutate as globalMutate } from 'swr'
 import { Button } from '@/components/ui/button'
-import { useRequests, type SongRequest } from '@/components/radio/requests-panel'
+import { clearRequests, useRequests, type SongRequest } from '@/components/radio/requests-panel'
 import { sendJson } from '@/lib/fetcher'
 
 type ChannelOption = { slug: string; name: string; frequency: string }
@@ -23,6 +23,17 @@ export function RequestsAdmin({ slug, channels }: { slug: string; channels: Chan
       mutate()
     } catch {
       toast.error('Kunne ikke oppdatere ønsket')
+    }
+  }
+
+  async function clearAll() {
+    if (!window.confirm('Tøm alle låtønsker på denne kanalen?')) return
+    try {
+      const res = await clearRequests(slug)
+      toast.success(`Fjernet ${res.cleared} ønsker`)
+      mutate()
+    } catch {
+      toast.error('Kunne ikke tømme ønskene')
     }
   }
 
@@ -49,7 +60,21 @@ export function RequestsAdmin({ slug, channels }: { slug: string; channels: Chan
     <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Låtønsker</h2>
-        <span className="font-mono text-xs text-muted-foreground">{pending.length} åpne</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-muted-foreground">{pending.length} åpne</span>
+          {requests.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 rounded-full px-3 text-muted-foreground"
+              disabled={busyId !== null}
+              onClick={clearAll}
+            >
+              <Trash2 className="size-4" aria-hidden />
+              Tøm alle
+            </Button>
+          )}
+        </div>
       </div>
 
       <label className="flex flex-col gap-1.5 text-sm font-medium">
