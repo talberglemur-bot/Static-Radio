@@ -154,5 +154,7 @@ export const songRequest = pgTable('song_request', {
 export const listenerPresence = pgTable('listener_presence', {
   listenerId: text('listener_id').primaryKey(),
   channelId: integer('channel_id').notNull(),
+  userId: text('user_id'),
+  userName: text('user_name'),
   lastSeen: tz('last_seen').notNull().defaultNow(),
 })

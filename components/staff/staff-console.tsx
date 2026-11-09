@@ -18,6 +18,7 @@ import { AdBreakPanel } from './ad-break-panel'
 import { RelayPanel } from './relay-panel'
 import { NewChannelForm } from './new-channel-form'
 import { MoveListenersPanel } from './move-listeners-panel'
+import { ListenersPanel } from './listeners-panel'
 
 type ChannelOption = { slug: string; name: string; frequency: string }
 
@@ -125,6 +126,7 @@ export function StaffConsole({
 
           <TabsContent value="deck" className="flex flex-col gap-4">
             <DeckPanel slug={slug} engine={engine} />
+            {isAdmin && <ListenersPanel />}
             <AdBreakPanel slug={slug} onBreak={!!data?.adBreak} />
             <RelayPanel slug={slug} activeId={data?.channel.relay?.id ?? null} />
             <MoveListenersPanel

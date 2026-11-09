@@ -119,7 +119,12 @@ export async function advanceIfNeeded(channelId: number, force = false) {
 
 export async function getStationState(
   slug: string,
-  opts: { listenerId?: string; sinceSfx?: number; sinceChunk?: number },
+  opts: {
+    listenerId?: string
+    listenerUser?: { id: string; name: string }
+    sinceSfx?: number
+    sinceChunk?: number
+  },
 ) {
   const found = await getChannelBySlug(slug)
   if (!found) return null
@@ -128,12 +133,14 @@ export async function getStationState(
   const now = Date.now()
 
   if (opts.listenerId) {
+    const userId = opts.listenerUser?.id ?? null
+    const userName = opts.listenerUser?.name ?? null
     await db
       .insert(listenerPresence)
-      .values({ listenerId: opts.listenerId, channelId: ch.id })
+      .values({ listenerId: opts.listenerId, channelId: ch.id, userId, userName })
       .onConflictDoUpdate({
         target: listenerPresence.listenerId,
-        set: { channelId: ch.id, lastSeen: new Date(now) },
+        set: { channelId: ch.id, userId, userName, lastSeen: new Date(now) },
       })
   }
 
