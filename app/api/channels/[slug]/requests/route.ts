@@ -1,4 +1,4 @@
-import { and, desc, eq, gt } from 'drizzle-orm'
+import { and, desc, eq, gt, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { queueItem, songRequest } from '@/lib/db/schema'
 import {
@@ -68,7 +68,21 @@ export async function DELETE(
     const deleted = await db
       .delete(songRequest)
       .where(and(...conditions))
-      .returning({ id: songRequest.id })
+      .returning({ status: songRequest.status, trackId: songRequest.trackId })
+
+    // Accepted wishes put a priority track in a queue (possibly on another channel);
+    // pull one matching queue entry per wish so the song never plays.
+    for (const r of deleted) {
+      if (r.status !== 'queued' || r.trackId == null) continue
+      const [item] = await db
+        .select({ id: queueItem.id })
+        .from(queueItem)
+        .where(and(eq(queueItem.trackId, r.trackId), gt(queueItem.priority, 0)))
+        .orderBy(sql`case when ${queueItem.channelId} = ${ch.id} then 0 else 1 end`, queueItem.id)
+        .limit(1)
+      if (item) await db.delete(queueItem).where(eq(queueItem.id, item.id))
+    }
+
     return Response.json({ ok: true, cleared: deleted.length })
   } catch (err) {
     return errorResponse(err)
