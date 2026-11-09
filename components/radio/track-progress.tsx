@@ -16,7 +16,7 @@ export function useTrackPosition(
   if (!nowPlaying) return 0
   const pos = nowPlaying.paused
     ? nowPlaying.positionSec
-    : (getServerNow() - nowPlaying.startedAt) / 1000
+    : ((getServerNow() - nowPlaying.startedAt) / 1000) * nowPlaying.speed
   return Math.min(Math.max(0, pos), nowPlaying.track.durationSec)
 }
 

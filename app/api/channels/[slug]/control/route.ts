@@ -2,8 +2,9 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { channel, queueItem, relayStation, sfxEvent, track } from '@/lib/db/schema'
 import { errorResponse, requireStaff } from '@/lib/session'
-import { advanceIfNeeded, getChannelBySlug, resumeChannel } from '@/lib/station'
+import { advanceIfNeeded, getChannelBySlug, positionSec, resumeChannel } from '@/lib/station'
 import { BUILT_IN_SFX } from '@/lib/sfx-catalog'
+import { clampSpeed, toFilter } from '@/lib/fx-catalog'
 import { buildAdTimeline, decodeAdItems, encodeAdItems, type AdItem } from '@/lib/ad-catalog'
 
 type Action =
@@ -16,6 +17,7 @@ type Action =
   | { type: 'restart' }
   | { type: 'seek'; positionSec: number }
   | { type: 'volume'; value: number }
+  | { type: 'fx'; speed?: number; filter?: string }
   | { type: 'autoDj'; value: boolean }
   | { type: 'relay'; streamId: string | null }
   | { type: 'details'; name?: string; description?: string; ticker?: string }
@@ -90,8 +92,23 @@ export async function POST(
         const ref = ch.pausedAt ?? now
         await db
           .update(channel)
-          .set({ startedAt: new Date(ref.getTime() - pos * 1000) })
+          .set({ startedAt: new Date(ref.getTime() - (pos / (ch.fxSpeed || 1)) * 1000) })
           .where(eq(channel.id, ch.id))
+        break
+      }
+      case 'fx': {
+        const patch: Partial<typeof channel.$inferInsert> = {}
+        if (action.filter !== undefined) patch.fxFilter = toFilter(action.filter)
+        if (action.speed !== undefined) {
+          const speed = clampSpeed(action.speed)
+          patch.fxSpeed = speed
+          // Keep the song at the same spot when the speed changes.
+          if (ch.startedAt) {
+            const ref = (ch.pausedAt ?? now).getTime()
+            patch.startedAt = new Date(ref - (positionSec(ch, now.getTime()) / speed) * 1000)
+          }
+        }
+        if (Object.keys(patch).length) await db.update(channel).set(patch).where(eq(channel.id, ch.id))
         break
       }
       case 'volume':

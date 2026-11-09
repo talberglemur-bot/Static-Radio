@@ -140,5 +140,146 @@ export function playSynthSfx(ctx: AudioContext, out: AudioNode, kind: BuiltInSfx
       })
       break
     }
+    case 'scratch': {
+      const buf = noiseBuffer(ctx, 0.2)
+      ;[0, 0.16, 0.26, 0.42].forEach((offset, i) => {
+        const s = t + offset
+        const src = ctx.createBufferSource()
+        src.buffer = buf
+        const bp = ctx.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.Q.value = 4
+        const up = i % 2 === 0
+        bp.frequency.setValueAtTime(up ? 500 : 2500, s)
+        bp.frequency.exponentialRampToValueAtTime(up ? 2500 : 500, s + 0.13)
+        const g = envGain(ctx, out, s, 0.8, 0.01, 0.13)
+        src.connect(bp).connect(g)
+        src.start(s)
+        src.stop(s + 0.16)
+      })
+      break
+    }
+    case 'boom': {
+      const g = envGain(ctx, out, t, 0.9, 0.005, 2)
+      const o = ctx.createOscillator()
+      o.type = 'sine'
+      o.frequency.setValueAtTime(90, t)
+      o.frequency.exponentialRampToValueAtTime(28, t + 1.5)
+      o.connect(g)
+      o.start(t)
+      o.stop(t + 2.1)
+      const src = ctx.createBufferSource()
+      src.buffer = noiseBuffer(ctx, 1.5)
+      const lp = ctx.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.setValueAtTime(1800, t)
+      lp.frequency.exponentialRampToValueAtTime(120, t + 1.4)
+      const ng = envGain(ctx, out, t, 0.6, 0.005, 1.4)
+      src.connect(lp).connect(ng)
+      src.start(t)
+      break
+    }
+    case 'whoosh': {
+      const src = ctx.createBufferSource()
+      src.buffer = noiseBuffer(ctx, 1)
+      const bp = ctx.createBiquadFilter()
+      bp.type = 'bandpass'
+      bp.Q.value = 1.5
+      bp.frequency.setValueAtTime(200, t)
+      bp.frequency.exponentialRampToValueAtTime(5000, t + 0.6)
+      const pan = ctx.createStereoPanner()
+      pan.pan.setValueAtTime(-1, t)
+      pan.pan.linearRampToValueAtTime(1, t + 0.8)
+      const g = envGain(ctx, out, t, 0.7, 0.4, 0.45)
+      src.connect(bp).connect(pan).connect(g)
+      src.start(t)
+      src.stop(t + 1)
+      break
+    }
+    case 'sad': {
+      ;[392, 370, 349, 330].forEach((f, i) => {
+        const s = t + i * 0.42
+        const len = i === 3 ? 1.1 : 0.36
+        const g = envGain(ctx, out, s, 0.25, 0.03, len)
+        const o = ctx.createOscillator()
+        o.type = 'sawtooth'
+        o.frequency.setValueAtTime(f, s)
+        if (i === 3) {
+          const lfo = ctx.createOscillator()
+          lfo.frequency.value = 6
+          const depth = ctx.createGain()
+          depth.gain.value = 8
+          lfo.connect(depth).connect(o.frequency)
+          lfo.start(s)
+          lfo.stop(s + len + 0.1)
+        }
+        const lp = ctx.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = 1400
+        o.connect(lp).connect(g)
+        o.start(s)
+        o.stop(s + len + 0.1)
+      })
+      break
+    }
+    case 'cowbell': {
+      for (let i = 0; i < 4; i++) {
+        const s = t + i * 0.25
+        const g = envGain(ctx, out, s, 0.3, 0.002, 0.3)
+        const bp = ctx.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = 800
+        bp.Q.value = 2
+        bp.connect(g)
+        ;[540, 800].forEach((f) => {
+          const o = ctx.createOscillator()
+          o.type = 'square'
+          o.frequency.value = f
+          o.connect(bp)
+          o.start(s)
+          o.stop(s + 0.32)
+        })
+      }
+      break
+    }
+    case 'glitch': {
+      for (let i = 0; i < 14; i++) {
+        const s = t + i * 0.06
+        const g = envGain(ctx, out, s, 0.22, 0.002, 0.05)
+        const o = ctx.createOscillator()
+        o.type = Math.random() > 0.5 ? 'square' : 'sawtooth'
+        o.frequency.value = 80 + Math.random() * 2400
+        o.connect(g)
+        o.start(s)
+        o.stop(s + 0.06)
+      }
+      break
+    }
+    case 'vinylstop': {
+      const g = envGain(ctx, out, t, 0.35, 0.01, 1.1)
+      ;[220, 330].forEach((f) => {
+        const o = ctx.createOscillator()
+        o.type = 'sawtooth'
+        o.frequency.setValueAtTime(f, t)
+        o.frequency.exponentialRampToValueAtTime(18, t + 1.1)
+        o.connect(g)
+        o.start(t)
+        o.stop(t + 1.15)
+      })
+      break
+    }
+    case 'coin': {
+      ;[988, 1319].forEach((f, i) => {
+        const s = t + i * 0.08
+        const g = envGain(ctx, out, s, 0.22, 0.003, i ? 0.45 : 0.08)
+        const o = ctx.createOscillator()
+        o.type = 'square'
+        o.frequency.value = f
+        o.connect(g)
+        o.start(s)
+        o.stop(s + 0.5)
+      })
+      break
+    }
   }
 }

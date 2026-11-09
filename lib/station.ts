@@ -40,10 +40,11 @@ export async function getChannelBySlug(slug: string) {
   return row ?? null
 }
 
-function positionSec(ch: Channel, now: number) {
+/** Track position in audio seconds; a slowed channel moves through the file slower than the wall clock. */
+export function positionSec(ch: Channel, now: number) {
   if (!ch.startedAt) return 0
   const end = ch.pausedAt ? ch.pausedAt.getTime() : now
-  return Math.max(0, (end - ch.startedAt.getTime()) / 1000)
+  return Math.max(0, ((end - ch.startedAt.getTime()) / 1000) * (ch.fxSpeed || 1))
 }
 
 /**
@@ -274,6 +275,8 @@ export async function getStationState(
       relay,
       closed,
       closesAt: ch.closedAt?.getTime() ?? null,
+      // Effects only apply to our own music, never to NRK relays.
+      fx: relay ? { speed: 1, filter: 'none' } : { speed: ch.fxSpeed || 1, filter: ch.fxFilter || 'none' },
     },
     // While relaying NRK, our own songs are off the air and must not be shown.
     nowPlaying: current && !relay
@@ -282,6 +285,7 @@ export async function getStationState(
           startedAt: ch.startedAt?.getTime() ?? now,
           paused: !!ch.pausedAt,
           positionSec: positionSec(ch, now),
+          speed: ch.fxSpeed || 1,
         }
       : null,
     upNext: relay ? [] : upNext.map((r) => ({ queueId: r.queueId, ...publicTrack(r.track) })),

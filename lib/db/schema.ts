@@ -82,6 +82,8 @@ export const channel = pgTable('channel', {
   moveToSlug: text('move_to_slug'),
   moveAt: tz('move_at'),
   closedAt: tz('closed_at'),
+  fxSpeed: real('fx_speed').notNull().default(1),
+  fxFilter: text('fx_filter').notNull().default('none'),
   createdAt: tz('created_at').notNull().defaultNow(),
 })
 

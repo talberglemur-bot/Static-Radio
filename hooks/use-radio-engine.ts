@@ -53,6 +53,87 @@ function primeSpeech() {
   synth.speak(u)
 }
 
+function setRate(el: HTMLAudioElement, rate: number) {
+  // Let the pitch follow the speed, so "slowed" sounds deep and nightcore sounds bright.
+  el.preservesPitch = false
+  if (el.defaultPlaybackRate !== rate) el.defaultPlaybackRate = rate
+  if (el.playbackRate !== rate) el.playbackRate = rate
+}
+
+/** Wires input → effect → output and returns a function that tears the effect down. */
+function buildFilter(ctx: AudioContext, input: AudioNode, output: AudioNode, filter: string) {
+  const nodes: AudioNode[] = []
+  const biquad = (type: BiquadFilterType, freq: number, q = 0.7, gain = 0) => {
+    const f = ctx.createBiquadFilter()
+    f.type = type
+    f.frequency.value = freq
+    f.Q.value = q
+    f.gain.value = gain
+    nodes.push(f)
+    return f
+  }
+  const chain = (...list: AudioNode[]) => {
+    list.reduce<AudioNode>((prev, n) => (prev.connect(n), n), input).connect(output)
+  }
+
+  switch (filter) {
+    case 'lofi':
+      chain(biquad('highpass', 220), biquad('lowpass', 2400, 0.9), biquad('peaking', 900, 1, 3))
+      break
+    case 'underwater':
+      chain(biquad('lowpass', 420, 6))
+      break
+    case 'phone':
+      chain(biquad('highpass', 700, 1), biquad('lowpass', 3200, 1), biquad('peaking', 1600, 1.5, 6))
+      break
+    case 'bass': {
+      const trim = ctx.createGain()
+      trim.gain.value = 0.75
+      nodes.push(trim)
+      chain(biquad('lowshelf', 160, 0.7, 14), trim)
+      break
+    }
+    case 'echo': {
+      const delay = ctx.createDelay(1)
+      delay.delayTime.value = 0.32
+      const feedback = ctx.createGain()
+      feedback.gain.value = 0.42
+      const wet = ctx.createGain()
+      wet.gain.value = 0.5
+      const tone = biquad('lowpass', 3000)
+      nodes.push(delay, feedback, wet)
+      input.connect(output)
+      input.connect(delay)
+      delay.connect(tone).connect(feedback).connect(delay)
+      delay.connect(wet).connect(output)
+      break
+    }
+    case 'spin': {
+      const panner = ctx.createStereoPanner()
+      const lfo = ctx.createOscillator()
+      lfo.frequency.value = 0.16
+      const depth = ctx.createGain()
+      depth.gain.value = 0.95
+      lfo.connect(depth).connect(panner.pan)
+      lfo.start()
+      nodes.push(panner, depth)
+      chain(panner)
+      return () => {
+        lfo.stop()
+        lfo.disconnect()
+        input.disconnect()
+        nodes.forEach((n) => n.disconnect())
+      }
+    }
+    default:
+      input.connect(output)
+  }
+  return () => {
+    input.disconnect()
+    nodes.forEach((n) => n.disconnect())
+  }
+}
+
 type Options = {
   /** Staff monitoring their own channel should not hear their delayed voice. */
   playVoice?: boolean
@@ -69,6 +150,9 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
   const ctxRef = useRef<AudioContext | null>(null)
   const sfxBusRef = useRef<GainNode | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
+  const fxInputRef = useRef<GainNode | null>(null)
+  const fxRef = useRef<{ filter: string; teardown: () => void } | null>(null)
+  const [graphReady, setGraphReady] = useState(false)
   const sinceRef = useRef({ sfx: -1, chunk: -1, slug })
   const offsetRef = useRef(0)
   const voiceQueue = useRef<string[]>([])
@@ -119,11 +203,15 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
     analyser.connect(ctx.destination)
     const sfxBus = ctx.createGain()
     sfxBus.connect(analyser)
-    if (musicRef.current) ctx.createMediaElementSource(musicRef.current).connect(analyser)
+    const fxInput = ctx.createGain()
+    if (musicRef.current) ctx.createMediaElementSource(musicRef.current).connect(fxInput)
     if (voiceRef.current) ctx.createMediaElementSource(voiceRef.current).connect(analyser)
+    fxRef.current = { filter: 'none', teardown: buildFilter(ctx, fxInput, analyser, 'none') }
     ctxRef.current = ctx
     sfxBusRef.current = sfxBus
     analyserRef.current = analyser
+    fxInputRef.current = fxInput
+    setGraphReady(true)
     return ctx
   }, [])
 
@@ -190,6 +278,8 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
     if (sfxBusRef.current) sfxBusRef.current.gain.value = volume
 
     const ad = data.adBreak
+    const speed = !ad && !data.channel.relay && data.nowPlaying ? data.nowPlaying.speed : 1
+    setRate(el, speed)
     if (ad) {
       if (!tunedIn) {
         if (!el.paused) el.pause()
@@ -281,7 +371,7 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
 
     const expected = np.paused
       ? np.positionSec
-      : (Date.now() + offsetRef.current - np.startedAt) / 1000
+      : ((Date.now() + offsetRef.current - np.startedAt) / 1000) * np.speed
 
     const wantSrc = new URL(np.track.src, window.location.origin).href
     if (el.src !== wantSrc) {
@@ -290,7 +380,8 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
       const seekOnLoad = () => {
         const target = np.paused
           ? np.positionSec
-          : (Date.now() + offsetRef.current - np.startedAt) / 1000
+          : ((Date.now() + offsetRef.current - np.startedAt) / 1000) * np.speed
+        setRate(el, np.speed)
         el.currentTime = Math.max(0, Math.min(target, np.track.durationSec - 0.25))
         if (!np.paused) el.play().then(() => setBlocked(false)).catch(() => setBlocked(true))
       }
@@ -309,6 +400,16 @@ export function useRadioEngine(slug: string, { playVoice = true, onReaction }: O
     }
     if (el.paused) el.play().then(() => setBlocked(false)).catch(() => setBlocked(true))
   }, [data, tunedIn, volume, playVoice, playSfx, playNextVoice, stopAds])
+
+  const activeFilter = data && !data.adBreak ? data.channel.fx.filter : 'none'
+  useEffect(() => {
+    const ctx = ctxRef.current
+    const input = fxInputRef.current
+    const analyser = analyserRef.current
+    if (!graphReady || !ctx || !input || !analyser || fxRef.current?.filter === activeFilter) return
+    fxRef.current?.teardown()
+    fxRef.current = { filter: activeFilter, teardown: buildFilter(ctx, input, analyser, activeFilter) }
+  }, [activeFilter, graphReady])
 
   const trackLimitSec = data?.nowPlaying?.track.durationSec
   useEffect(() => {
