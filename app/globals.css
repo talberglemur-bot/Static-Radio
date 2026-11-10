@@ -38,6 +38,17 @@
   --animate-marquee: marquee 22s linear infinite;
   --animate-float-up: float-up 2.2s ease-out forwards;
   --animate-rise: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-eq: eq 0.9s ease-in-out infinite;
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 @keyframes rise {

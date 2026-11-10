@@ -45,6 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="nb"
+      data-scroll-behavior="smooth"
       className={`bg-background ${figtree.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >

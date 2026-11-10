@@ -60,8 +60,10 @@ export const auth = betterAuth({
       : []),
   ],
   session: {
-    expiresIn: 60 * 60 * 24 * 7,
-    updateAge: 60 * 60 * 24,
+    // Sliding 3-day window: any activity pushes expiry 3 days out (refreshed at most hourly),
+    // so a user is logged out only after 3 days without using the app.
+    expiresIn: 60 * 60 * 24 * 3,
+    updateAge: 60 * 60,
   },
   ...(process.env.NODE_ENV === 'development'
     ? {

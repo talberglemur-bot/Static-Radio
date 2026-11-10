@@ -143,6 +143,16 @@ type Options = {
 export function useRadioEngine(slug: string, { playVoice = true, onReaction }: Options = {}) {
   const [tunedIn, setTunedIn] = useState(false)
   const [volume, setVolume] = useState(0.8)
+  const volumeLoadedRef = useRef(false)
+  useEffect(() => {
+    const saved = localStorage.getItem('stc-volume')
+    const v = Number(saved)
+    if (saved !== null && Number.isFinite(v) && v >= 0 && v <= 1) setVolume(v)
+    volumeLoadedRef.current = true
+  }, [])
+  useEffect(() => {
+    if (volumeLoadedRef.current) localStorage.setItem('stc-volume', String(volume))
+  }, [volume])
   const [blocked, setBlocked] = useState(false)
 
   const musicRef = useRef<HTMLAudioElement | null>(null)
