@@ -27,12 +27,43 @@ export function ChatPanel({ slug, moderate = false }: { slug: string; moderate?:
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const listRef = useRef<HTMLOListElement>(null)
+  const nearBottomRef = useRef(true)
+  const [unseen, setUnseen] = useState(0)
   const lastId = messages[messages.length - 1]?.id
+  const prevLastIdRef = useRef<number | undefined>(undefined)
 
+  // Only follow new messages if the reader is already at the bottom; otherwise offer a jump button.
   useEffect(() => {
     const el = listRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [lastId])
+    if (!el || lastId === undefined) return
+    const firstLoad = prevLastIdRef.current === undefined
+    const added = firstLoad ? 0 : messages.filter((m) => m.id > (prevLastIdRef.current ?? 0)).length
+    prevLastIdRef.current = lastId
+    if (firstLoad || nearBottomRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: firstLoad ? 'auto' : 'smooth' })
+    } else if (added > 0) {
+      setUnseen((n) => n + added)
+    }
+  }, [lastId, messages])
+
+  useEffect(() => {
+    prevLastIdRef.current = undefined
+    nearBottomRef.current = true
+    setUnseen(0)
+  }, [slug])
+
+  function onScroll() {
+    const el = listRef.current
+    if (!el) return
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+    if (nearBottomRef.current) setUnseen(0)
+  }
+
+  function jumpToLatest() {
+    const el = listRef.current
+    el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    setUnseen(0)
+  }
 
   async function submit(e?: FormEvent) {
     e?.preventDefault()
@@ -66,22 +97,32 @@ export function ChatPanel({ slug, moderate = false }: { slug: string; moderate?:
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="relative">
       <ol
         ref={listRef}
-        className="flex h-72 flex-col gap-2 overflow-y-auto rounded-lg bg-card p-3"
+        onScroll={onScroll}
+        className="flex h-80 flex-col gap-1 overflow-y-auto overscroll-contain rounded-lg bg-card p-2"
         aria-live="polite"
         aria-label="Chatmeldinger"
       >
         {messages.length === 0 && (
           <li className="m-auto text-sm text-muted-foreground">Ingen meldinger ennå. Si hei!</li>
         )}
-        {messages.map((m) => (
-          <li key={m.id} className="group flex items-start gap-2 text-sm leading-relaxed">
+        {messages.map((m) => {
+          const mine = !!me && m.userName === me.name
+          return (
+          <li
+            key={m.id}
+            className={cn(
+              'group flex animate-rise items-start gap-2 rounded-md px-2 py-1.5 text-sm leading-relaxed [animation-duration:0.35s] motion-reduce:animate-none',
+              mine && 'bg-secondary/60',
+            )}
+          >
             <p className="min-w-0 flex-1 text-pretty break-words">
               <span
                 className={cn(
                   'mr-1.5 font-semibold',
-                  m.isStaff ? 'text-accent' : 'text-foreground',
+                  m.isStaff ? 'text-accent' : mine ? 'text-primary' : 'text-foreground',
                 )}
               >
                 {m.userName}
@@ -93,6 +134,12 @@ export function ChatPanel({ slug, moderate = false }: { slug: string; moderate?:
               </span>
               <span className="text-foreground/85">{m.body}</span>
             </p>
+            <time
+              dateTime={m.createdAt}
+              className="shrink-0 pt-0.5 font-mono text-[11px] text-muted-foreground tabular-nums"
+            >
+              {new Date(m.createdAt).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
+            </time>
             {moderate && (
               <button
                 type="button"
@@ -104,8 +151,19 @@ export function ChatPanel({ slug, moderate = false }: { slug: string; moderate?:
               </button>
             )}
           </li>
-        ))}
+          )
+        })}
       </ol>
+      {unseen > 0 && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          className="absolute bottom-3 left-1/2 min-h-9 -translate-x-1/2 animate-rise rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-lg"
+        >
+          {unseen} {unseen === 1 ? 'ny melding' : 'nye meldinger'}
+        </button>
+      )}
+      </div>
 
       {me ? (
         <form onSubmit={submit} className="flex items-center gap-2">
@@ -119,8 +177,13 @@ export function ChatPanel({ slug, moderate = false }: { slug: string; moderate?:
             onKeyDown={onKeyDown}
             maxLength={280}
             placeholder="Send en hilsen"
-            className="h-11 min-w-0 flex-1 rounded-full border bg-card px-4 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-11 min-w-0 flex-1 rounded-full border bg-card px-4 text-base outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
           />
+          {text.length > 220 && (
+            <span className="font-mono text-xs text-muted-foreground tabular-nums" aria-live="polite">
+              {280 - text.length}
+            </span>
+          )}
           <Button
             type="submit"
             size="icon"
